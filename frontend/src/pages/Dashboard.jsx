@@ -76,6 +76,12 @@ const Dashboard = () => {
       const { identityContract, scoreContract, lendingContract } =
         getContracts(signer);
 
+      console.log(
+        "Connected to Network:",
+        (await signer.provider.getNetwork()).name,
+      );
+      console.log("Using Score Contract at:", scoreContract?.target);
+
       if (!isSilent) {
         // Restoring original behavior: Do not auto-verify on load. Force user to see form on reload.
         // if (identityContract && identityContract.target !== ethers.ZeroAddress) {
@@ -126,6 +132,20 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error("Error fetching user data", error);
+      if (
+        error.code === "BAD_DATA" ||
+        error.message.includes("decode result data")
+      ) {
+        console.warn(
+          "Contract data couldn't be decoded. Is MetaMask on the BSC Testnet?",
+        );
+        // Only alert if it's the first time and not a silent refresh
+        if (!isSilent) {
+          alert(
+            "Could not fetch protocol data. Please ensure your wallet is connected to the BNB Smart Chain Testnet.",
+          );
+        }
+      }
     }
   };
 
