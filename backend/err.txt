@@ -1,0 +1,168 @@
+﻿node.exe : 
+[1m[33mWarning:[39m[22m 
+Return value of low-level 
+calls not used.
+At C:\Program 
+Files\nodejs\npx.ps1:29 
+char:3
++   & $NODE_EXE $NPX_CLI_JS 
+$args
++   
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo           
+   : NotSpecified: ([1m[3  
+  3mWarnin...calls not use   
+ d.:String) [], RemoteExc    
+eption
+    + FullyQualifiedErrorId  
+   : NativeCommandError
+ 
+   --> contracts/HybridLendin
+g.sol:344:13:
+    |
+344 |             
+user.call{value: 
+remainingCollateral}("");
+    |             ^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^
+
+
+[1m[33mWarning:[39m[22m 
+Unreachable code.
+   --> @openzeppelin/contract
+s/token/ERC721/ERC721.sol:135
+:9:
+    |
+135 |         ERC721Utils.che
+ckOnERC721Received(_msgSender
+(), from, to, tokenId, data);
+    |         ^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+[1m[33mWarning:[39m[22m 
+Unused function parameter. 
+Remove or comment out the 
+variable name to silence 
+this warning.
+  --> contracts/IdentityRegis
+try.sol:93:27:
+   |
+93 |     function 
+transferFrom(address from, 
+address to, uint256 tokenId) 
+public virtual override {
+   |                         
+  ^^^^^^^^^^^^
+
+
+[1m[33mWarning:[39m[22m 
+Unused function parameter. 
+Remove or comment out the 
+variable name to silence 
+this warning.
+  --> contracts/IdentityRegis
+try.sol:93:41:
+   |
+93 |     function 
+transferFrom(address from, 
+address to, uint256 tokenId) 
+public virtual override {
+   |                         
+                ^^^^^^^^^^
+
+
+[1m[33mWarning:[39m[22m 
+Unused function parameter. 
+Remove or comment out the 
+variable name to silence 
+this warning.
+  --> contracts/IdentityRegis
+try.sol:93:53:
+   |
+93 |     function 
+transferFrom(address from, 
+address to, uint256 tokenId) 
+public virtual override {
+   |                         
+                            
+^^^^^^^^^^^^^^^
+
+
+[1m[33mWarning:[39m[22m 
+Unused function parameter. 
+Remove or comment out the 
+variable name to silence 
+this warning.
+  --> contracts/IdentityRegis
+try.sol:97:31:
+   |
+97 |     function 
+safeTransferFrom(address 
+from, address to, uint256 
+tokenId, bytes memory data) 
+public virtual override {
+   |                         
+      ^^^^^^^^^^^^
+
+
+[1m[33mWarning:[39m[22m 
+Unused function parameter. 
+Remove or comment out the 
+variable name to silence 
+this warning.
+  --> contracts/IdentityRegis
+try.sol:97:45:
+   |
+97 |     function 
+safeTransferFrom(address 
+from, address to, uint256 
+tokenId, bytes memory data) 
+public virtual override {
+   |                         
+                    
+^^^^^^^^^^
+
+
+[1m[33mWarning:[39m[22m 
+Unused function parameter. 
+Remove or comment out the 
+variable name to silence 
+this warning.
+  --> contracts/IdentityRegis
+try.sol:97:57:
+   |
+97 |     function 
+safeTransferFrom(address 
+from, address to, uint256 
+tokenId, bytes memory data) 
+public virtual override {
+   |                         
+                             
+   ^^^^^^^^^^^^^^^
+
+
+[1m[33mWarning:[39m[22m 
+Unused function parameter. 
+Remove or comment out the 
+variable name to silence 
+this warning.
+  --> contracts/IdentityRegis
+try.sol:97:74:
+   |
+97 |     function 
+safeTransferFrom(address 
+from, address to, uint256 
+tokenId, bytes memory data) 
+public virtual override {
+   |                         
+                             
+                    
+^^^^^^^^^^^^^^^^^
+
+
+Generating typings for: 35 artifacts in dir: typechain-types for target: ethers-v6
+Successfully generated 92 typings!
+Compiled 32 Solidity files successfully (evm target: cancun).
