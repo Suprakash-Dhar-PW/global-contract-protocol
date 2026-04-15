@@ -119,7 +119,7 @@ function App() {
   const [role, setRole] = useState(localStorage.getItem('role') || null);
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <div className="min-h-screen bg-[#09090b] text-zinc-200 font-sans selection:bg-zinc-800 overflow-x-hidden relative">
         <div className="fixed top-0 left-1/4 w-[50rem] h-[50rem] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none" />
         <div className="fixed bottom-0 right-1/4 w-[40rem] h-[40rem] bg-blue-600/10 rounded-full blur-[100px] pointer-events-none" />
