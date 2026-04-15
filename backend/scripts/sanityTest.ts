@@ -24,7 +24,10 @@ async function main() {
   const isVerified = await identityRegistry.isVerified(deployer.address);
   if (!isVerified) {
     console.log("Minting Identity NFT...");
-    const tx = await identityRegistry.mintIdentity(deployer.address);
+    const tx = await identityRegistry.verifyIdentity(
+      deployer.address, 
+      ethers.keccak256(ethers.toUtf8Bytes("IN-AADHAAR-123456789012"))
+    );
     await tx.wait();
     console.log("Identity minted.");
   } else {

@@ -1,150 +1,78 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { motion } from "framer-motion";
+import { ShieldCheck, TrendingUp, Zap } from "lucide-react";
 
-const ScoreCard = ({ score, isVerified }) => {
-  const [animatedScore, setAnimatedScore] = useState(300);
-
-  useEffect(() => {
-    // Simple counter animation
-    let start = animatedScore;
-    const end = score || 500;
-    if (start === end) return;
-    const duration = 1000;
-    const increment = (end - start) / (duration / 16);
-
-    const timer = setInterval(() => {
-      start += increment;
-      if ((increment > 0 && start >= end) || (increment < 0 && start <= end)) {
-        start = end;
-        clearInterval(timer);
-      }
-      setAnimatedScore(Math.floor(start));
-    }, 16);
-    return () => clearInterval(timer);
-  }, [score]);
-
-  // Determine colors based on score
-  let ringColor = "from-red-500 to-red-600";
-  let dropShadow = "drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]";
-  let statusText = "POOR";
-  let textColor = "text-red-400";
-
-  if (score >= 700) {
-    ringColor = "from-green-400 to-emerald-600";
-    dropShadow = "drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]";
-    statusText = "PRIME";
-    textColor = "text-green-400";
-  } else if (score >= 500) {
-    ringColor = "from-yellow-400 to-orange-500";
-    dropShadow = "drop-shadow-[0_0_15px_rgba(245,158,11,0.5)]";
-    statusText = "FAIR";
-    textColor = "text-yellow-400";
-  }
-
-  // Calculate SVG stroke DashOffset
-  const radius = 60;
-  const circumference = 2 * Math.PI * radius;
-  const normalizedScore = Math.max(0, animatedScore - 300);
-  const percentage = normalizedScore / 700; // max score diff is 1000 - 300 = 700
-  const strokeDashoffset = circumference - percentage * circumference;
+const ScoreCard = ({ score, isVerified, theme = "blue" }) => {
+  const isPurple = theme === "purple";
+  const primaryColor = isPurple ? "purple" : "blue";
+  const secondaryColor = isPurple ? "orange" : "indigo";
+  const glowColor = isPurple ? "rgba(168,85,247,0.4)" : "rgba(59,130,246,0.4)";
 
   return (
-    <div
-      className={`relative bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl flex flex-col items-center justify-center space-y-6 ${dropShadow} transition-all duration-500 hover:scale-[1.02]`}
-    >
-      <div className="absolute top-4 left-4">
-        {isVerified ? (
-          <span className="flex items-center gap-2 text-xs font-bold px-3 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded-full shadow-inner shadow-green-500/20">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />{" "}
-            SOULBOUND
-          </span>
-        ) : (
-          <span className="flex items-center gap-2 text-xs font-bold px-3 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded-full shadow-inner shadow-red-500/20">
-            <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />{" "}
-            KYC REQUIRED
-          </span>
-        )}
-      </div>
+    <div className="relative group perspective-1000">
+      <motion.div
+        initial={{ opacity: 0, rotateY: -10 }}
+        animate={{ opacity: 1, rotateY: 0 }}
+        className="bg-white/5 backdrop-blur-2xl border border-white/10 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden transition-all duration-700 hover:shadow-[0_20px_80px_rgba(0,0,0,0.4)]"
+      >
+        {/* Animated background glow */}
+        <div className={`absolute -top-24 -right-24 w-64 h-64 bg-${primaryColor}-500/10 rounded-full blur-[100px] group-hover:bg-${primaryColor}-500/20 transition-all duration-1000`} />
+        <div className={`absolute -bottom-24 -left-24 w-64 h-64 bg-${secondaryColor}-500/10 rounded-full blur-[100px] group-hover:bg-${secondaryColor}-500/20 transition-all duration-1000`} />
 
-      <h2 className="text-xl font-bold text-gray-400 uppercase tracking-widest mt-4">
-        Credit Score
-      </h2>
+        <div className="relative z-10">
+          <div className="flex justify-between items-center mb-10">
+            <div className={`p-4 rounded-2xl bg-${primaryColor}-500/10 border border-${primaryColor}-500/20 text-${primaryColor}-400 shadow-[0_0_20px_rgba(0,0,0,0.2)]`}>
+              <Zap size={24} />
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Reputation Tier</span>
+              <p className={`text-sm font-black text-${primaryColor}-400 uppercase tracking-widest`}>
+                {score > 700 ? "Prime" : score > 500 ? "Gold" : "Standard"}
+              </p>
+            </div>
+          </div>
 
-      <div className="relative flex items-center justify-center w-48 h-48">
-        {/* Background Track */}
-        <svg className="absolute w-full h-full transform -rotate-90">
-          <circle
-            cx="96"
-            cy="96"
-            r={radius}
-            stroke="currentColor"
-            strokeWidth="12"
-            fill="transparent"
-            className="text-gray-800"
-          />
-        </svg>
-
-        {/* Animated Progress Ring */}
-        <svg className="absolute w-full h-full transform -rotate-90">
-          <defs>
-            <linearGradient
-              id="score-gradient"
-              x1="0%"
-              y1="0%"
-              x2="100%"
-              y2="100%"
-            >
-              <stop
-                offset="0%"
-                className={
-                  score >= 700
-                    ? "stop-color-emerald-400"
-                    : score >= 500
-                      ? "stop-color-yellow-400"
-                      : "stop-color-red-400"
-                }
-                stopColor="currentColor"
+          <div className="flex flex-col items-center py-6">
+            <h2 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-4">On-Chain Credit Score</h2>
+            <div className="relative">
+               {/* Radial shadow for number */}
+              <div 
+                className="absolute inset-0 blur-[40px] opacity-50"
+                style={{ backgroundColor: glowColor }}
               />
-              <stop
-                offset="100%"
-                className={
-                  score >= 700
-                    ? "stop-color-green-600"
-                    : score >= 500
-                      ? "stop-color-orange-500"
-                      : "stop-color-red-600"
-                }
-                stopColor="currentColor"
-              />
-            </linearGradient>
-          </defs>
-          <motion.circle
-            cx="96"
-            cy="96"
-            r={radius}
-            stroke="url(#score-gradient)"
-            strokeWidth="12"
-            fill="transparent"
-            strokeLinecap="round"
-            initial={{ strokeDashoffset: circumference }}
-            animate={{ strokeDashoffset }}
-            transition={{ duration: 1, ease: "easeInOut" }}
-            strokeDasharray={circumference}
-          />
-        </svg>
+              <span className="text-8xl font-black text-white relative z-10 tabular-nums tracking-tighter drop-shadow-2xl">
+                {score}
+              </span>
+            </div>
+            <div className="w-full h-1 bg-white/5 rounded-full mt-8 overflow-hidden">
+                <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(score / 900) * 100}%` }}
+                    className={`h-full bg-gradient-to-r from-${primaryColor}-500 to-${secondaryColor}-500 shadow-[0_0_10px_${glowColor}]`}
+                />
+            </div>
+          </div>
 
-        {/* Center Text */}
-        <div className="absolute flex flex-col items-center justify-center">
-          <span className="text-5xl font-black text-white">
-            {animatedScore}
-          </span>
-          <span
-            className={`text-sm font-bold tracking-widest mt-1 ${textColor}`}
-          >
-            {statusText}
-          </span>
+          <div className="grid grid-cols-2 gap-4 mt-10">
+            <div className="bg-zinc-900/50 p-4 rounded-2xl border border-white/5">
+              <span className="block text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">Status</span>
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={14} className={isVerified ? "text-emerald-400" : "text-zinc-600"} />
+                <span className={`text-xs font-black ${isVerified ? "text-emerald-400" : "text-zinc-500"} uppercase`}>
+                  {isVerified ? "Verified" : "Pending"}
+                </span>
+              </div>
+            </div>
+            <div className="bg-zinc-900/50 p-4 rounded-2xl border border-white/5">
+              <span className="block text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">Growth</span>
+              <div className="flex items-center gap-2">
+                <TrendingUp size={14} className="text-emerald-400" />
+                <span className="text-xs font-black text-emerald-400 uppercase">+12 pts</span>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

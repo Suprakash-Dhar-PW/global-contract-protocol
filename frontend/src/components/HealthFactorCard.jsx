@@ -1,115 +1,64 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
+import { motion } from "framer-motion";
+import { AlertTriangle, ShieldCheck, Info } from "lucide-react";
 
-const HealthFactorCard = ({ healthFactor, bnbPrice }) => {
-  const [pulse, setPulse] = useState(false);
-
-  // Trigger price pulse animation when bnbPrice changes
-  useEffect(() => {
-    setPulse(true);
-    const timer = setTimeout(() => setPulse(false), 1000);
-    return () => clearTimeout(timer);
-  }, [bnbPrice]);
-
-  // Determine status and colors based on health factor
-  // If healthFactor is null or extremely high (type(uint256).max equivalent), treat as Safe/No Loan
-  const isNoLoan = healthFactor === null || healthFactor > 10000;
-
-  let statusText = "SAFE";
-  let statusColor = "text-green-500";
-  let barColor = "from-green-400 to-green-600";
-  let containerDanger = "";
-
-  if (!isNoLoan) {
-    if (healthFactor <= 1.1) {
-      statusText = "DANGER";
-      statusColor = "text-red-500 animate-pulse";
-      barColor = "from-red-500 to-red-700";
-      containerDanger = "ring-2 ring-red-500 animate-pulse";
-    } else if (healthFactor <= 1.5) {
-      statusText = "CAUTION";
-      statusColor = "text-yellow-500";
-      barColor = "from-yellow-400 to-orange-500";
-    }
-  }
-
-  // Calculate bar width: min(healthFactor * 50%, 100%)
-  // If no loan, map to 100%
-  const barWidth = isNoLoan ? 100 : Math.min(healthFactor * 50, 100);
+const HealthFactorCard = ({ healthFactor, bnbPrice, theme = "blue" }) => {
+  const isPurple = theme === "purple";
+  const primaryColor = isPurple ? "purple" : "blue";
+  
+  const hfValue = healthFactor ? parseFloat(healthFactor).toFixed(2) : "--";
+  const hfStatus = healthFactor >= 1.5 ? "Secure" : healthFactor >= 1.1 ? "Caution" : "Danger";
+  const statusColor = healthFactor >= 1.5 ? "emerald" : healthFactor >= 1.1 ? "orange" : "red";
 
   return (
-    <div
-      className={`relative overflow-hidden rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 p-8 shadow-2xl transition-all duration-500 hover:shadow-blue-500/10 ${containerDanger}`}
-    >
-      {/* Decorative gradient orb */}
-      <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl" />
+    <div className="relative group">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white/5 backdrop-blur-2xl border border-white/10 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden"
+      >
+        {/* Dynamic glow based on status */}
+        <div className={`absolute inset-0 bg-gradient-to-br from-${statusColor}-500/5 to-transparent pointer-events-none opacity-40`} />
+        
+        <div className="relative z-10">
+          <div className="flex justify-between items-center mb-10">
+            <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.25em]">Position Health Factor</h3>
+            <div className={`flex items-center gap-2 px-3 py-1 rounded-full bg-${statusColor}-500/10 border border-${statusColor}-500/20`}>
+              <div className={`w-1.5 h-1.5 rounded-full bg-${statusColor}-400 animate-pulse`} />
+              <span className={`text-[10px] font-black text-${statusColor}-400 uppercase tracking-widest`}>{hfStatus}</span>
+            </div>
+          </div>
 
-      <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400 mb-6 drop-shadow-sm">
-        Live Risk Engine
-      </h3>
-
-      <div className="space-y-6 relative z-10">
-        <div className="flex justify-between items-center group">
-          <span className="text-gray-400 font-bold uppercase tracking-widest text-xs">
-            BNB Price (USD)
-          </span>
-          <span
-            className={`text-2xl font-black text-white transition-all duration-300 ${pulse ? "scale-110 text-blue-400" : ""}`}
-          >
-            {bnbPrice === 0 ? (
-              <div className="h-6 w-24 bg-gray-800 rounded animate-pulse" />
-            ) : (
-              `$${bnbPrice.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}`
-            )}
-          </span>
-        </div>
-
-        <div className="flex justify-between items-center">
-          <span
-            className="text-gray-400 font-bold uppercase tracking-widest text-xs cursor-help"
-            title="Health Factor = Collateral Value / Required Collateral Value"
-          >
-            Health Factor
-          </span>
-          <div className="flex items-center space-x-3">
-            <span
-              className={`text-4xl font-black ${statusColor} drop-shadow-[0_0_10px_currentColor]`}
-            >
-              {isNoLoan || healthFactor === null
-                ? "∞"
-                : healthFactor.toFixed(2)}
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className={`text-7xl font-black tabular-nums tracking-tighter ${healthFactor && healthFactor < 1.1 ? 'text-red-400' : 'text-white'}`}>
+              {hfValue}
             </span>
-            {!isNoLoan && (
-              <span
-                className={`text-xs font-bold px-3 py-1 rounded-full bg-white/5 border border-white/10 ${statusColor}`}
-              >
-                {statusText}
-              </span>
+            {healthFactor && (
+                <div className={`text-${statusColor}-500 mb-2`}>
+                   {healthFactor >= 1.5 ? <ShieldCheck size={24} /> : <AlertTriangle size={24} />}
+                </div>
             )}
           </div>
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex justify-between text-xs text-gray-500 uppercase tracking-widest font-black">
-            <span>Danger &lt; 1.0</span>
-            <span>Safe</span>
+          <div className="grid grid-cols-2 gap-4 mt-10">
+            <div className={`bg-${primaryColor}-500/5 border border-${primaryColor}-500/10 p-4 rounded-2xl`}>
+              <span className="block text-[8px] font-black text-zinc-500 uppercase tracking-widest mb-1">BNB Price</span>
+              <p className="text-lg font-black text-white font-mono">${bnbPrice ? parseFloat(bnbPrice).toFixed(2) : "0.00"}</p>
+            </div>
+            <div className="bg-zinc-900/50 border border-white/5 p-4 rounded-2xl flex flex-col justify-center">
+              <span className="block text-[8px] font-black text-zinc-500 uppercase tracking-widest mb-1">Liquidation at</span>
+              <p className="text-lg font-black text-red-500 font-mono tracking-tighter">&lt; 1.00 HF</p>
+            </div>
           </div>
-          <div className="h-4 w-full bg-[#0a0f1d]/50 border border-white/5 rounded-full overflow-hidden shadow-inner">
-            <div
-              className={`h-full bg-gradient-to-r ${barColor} rounded-full transition-all duration-1000 ease-out`}
-              style={{ width: `${barWidth}%` }}
-            />
-          </div>
-        </div>
 
-        <div className="pt-6 border-t border-white/10 flex items-center justify-between text-sm">
-          <span className="text-red-400 px-3 py-1.5 bg-red-500/10 rounded-md ring-1 ring-red-500/20 font-bold text-xs uppercase tracking-wide">
-            Keeper Engine Active
-          </span>
+          <div className="mt-8 p-4 rounded-2xl bg-white/5 border border-white/5 text-[10px] font-medium leading-relaxed text-zinc-500">
+             <div className="flex gap-2">
+                <Info size={14} className={`flex-shrink-0 text-${primaryColor}-400`} />
+                <p>If the Health Factor falls below 1.0, your collateral will be liquidated to cover the outstanding debt.</p>
+             </div>
+          </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

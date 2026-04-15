@@ -46,31 +46,39 @@ contract HybridLending is ReentrancyGuard, Ownable {
     uint256 public constant LIQUIDATION_BONUS_BPS = 500; // 5%
     uint256 public constant SCORE_PENALTY = 100;
 
+    // Packed struct to save gas
     struct Loan {
-        uint256 collateralAmount;
-        uint256 borrowedAmount;
-        uint256 debtAmount;
-        uint256 timestamp;
-        uint256 dueDate;
+        uint128 collateralAmount;
+        uint128 debtAmount;
+        uint40 timestamp;
+        uint40 dueDate;
         bool isActive;
     }
 
     mapping(address => Loan) public loans;
 
+    // ERC4626-Lite Accounting for Lenders
+    mapping(address => uint256) public lenderShares;
+    uint256 public totalShares;
+    uint256 public totalDebt; // Track active debt to calculate pool value
+
     event Borrowed(address indexed user, uint256 collateral, uint256 borrowed);
     event Repaid(address indexed user, uint256 amount);
-    event LoanLiquidated(
-        address indexed user,
-        address indexed liquidator,
-        uint256 debtRepaid,
-        uint256 collateralLiquidated
-    );
+    event PartialRepaid(address indexed user, uint256 amount, uint256 remainingDebt);
+    event LoanLiquidated(address indexed user, address indexed liquidator, uint256 debtRepaid, uint256 collateralLiquidated);
     event OracleUpdated(address newOracle);
+    event Deposited(address indexed lender, uint256 amount, uint256 shares);
+    event Withdrawn(address indexed lender, uint256 amount, uint256 shares);
 
     error NotVerified();
     error LoanAlreadyExists();
     error InvalidPrice();
+    error StaleOracle();
     error NotLiquidatable();
+    error ZeroAmount();
+    error ExceedsMaxBorrow();
+    error TransferFailed();
+    error InsufficientShares();
 
     constructor(
         address _identityRegistry,
@@ -92,6 +100,44 @@ contract HybridLending is ReentrancyGuard, Ownable {
     }
 
     // -----------------------------
+    // LENDER POOL ACCOUNTING
+    // -----------------------------
+
+    function getTotalPoolValue() public view returns (uint256) {
+        return borrowToken.balanceOf(address(this)) + totalDebt;
+    }
+
+    function deposit(uint256 amount) external nonReentrant {
+        if(amount == 0) revert ZeroAmount();
+        
+        uint256 poolValue = getTotalPoolValue();
+        uint256 shares = (totalShares == 0 || poolValue == 0) 
+            ? amount 
+            : (amount * totalShares) / poolValue;
+            
+        borrowToken.safeTransferFrom(msg.sender, address(this), amount);
+        
+        lenderShares[msg.sender] += shares;
+        totalShares += shares;
+        
+        emit Deposited(msg.sender, amount, shares);
+    }
+
+    function withdraw(uint256 shares) external nonReentrant {
+        if(shares == 0) revert ZeroAmount();
+        if(lenderShares[msg.sender] < shares) revert InsufficientShares();
+        
+        uint256 amount = (shares * getTotalPoolValue()) / totalShares;
+        
+        lenderShares[msg.sender] -= shares;
+        totalShares -= shares;
+        
+        borrowToken.safeTransfer(msg.sender, amount);
+        
+        emit Withdrawn(msg.sender, amount, shares);
+    }
+
+    // -----------------------------
     // ORACLE
     // -----------------------------
 
@@ -106,7 +152,7 @@ contract HybridLending is ReentrancyGuard, Ownable {
 
         if (price <= 0) revert InvalidPrice();
         if (answeredInRound < roundId) revert InvalidPrice();
-        // if (block.timestamp - updatedAt > 1 hours) revert InvalidPrice();
+        if (block.timestamp - updatedAt > 2 hours) revert StaleOracle();
 
         return uint256(price) * 1e10; // scale 8 decimals → 18
     }
@@ -141,50 +187,29 @@ contract HybridLending is ReentrancyGuard, Ownable {
         view
         returns (uint256)
     {
-        (uint256 collateralRatioBps, , , uint256 borrowLimit) =
-            getRiskParameters(user);
+        (uint256 collateralRatioBps, , , uint256 borrowLimit) = getRiskParameters(user);
 
-        uint256 maxFromCollateral =
-            (collateralValue * 10000) / collateralRatioBps;
+        uint256 maxFromCollateral = (collateralValue * 10000) / collateralRatioBps;
 
-        return maxFromCollateral < borrowLimit
-            ? maxFromCollateral
-            : borrowLimit;
+        return maxFromCollateral < borrowLimit ? maxFromCollateral : borrowLimit;
     }
 
-    // -----------------------------
-    // HEALTH FACTOR (NEW)
-    // -----------------------------
-
-    function getHealthFactor(address user)
-        public
-        view
-        returns (uint256)
-    {
+    function getHealthFactor(address user) public view returns (uint256) {
         Loan memory userLoan = loans[user];
-        if (!userLoan.isActive) return type(uint256).max;
+        if (!userLoan.isActive || userLoan.debtAmount == 0) return type(uint256).max;
 
         uint256 bnbPrice = getLatestBnbPrice();
-        uint256 collateralValue =
-            (userLoan.collateralAmount * bnbPrice) / 1e18;
+        uint256 collateralValue = (userLoan.collateralAmount * bnbPrice) / 1e18;
 
-        (, uint256 liquidationThresholdBps, , ) =
-            getRiskParameters(user);
+        (, uint256 liquidationThresholdBps, , ) = getRiskParameters(user);
 
-        uint256 requiredCollateral =
-            (userLoan.debtAmount * liquidationThresholdBps) / 10000;
+        uint256 requiredCollateral = (userLoan.debtAmount * liquidationThresholdBps) / 10000;
 
         if (requiredCollateral == 0) return type(uint256).max;
-
         return (collateralValue * 1e18) / requiredCollateral;
     }
 
-    // Frontend helper
-    function getUserLoan(address user)
-        external
-        view
-        returns (Loan memory)
-    {
+    function getUserLoan(address user) external view returns (Loan memory) {
         return loans[user];
     }
 
@@ -192,48 +217,32 @@ contract HybridLending is ReentrancyGuard, Ownable {
     // BORROW
     // -----------------------------
 
-    function borrow(uint256 borrowAmount)
-        external
-        payable
-        nonReentrant
-    {
-        if (!identityRegistry.isVerified(msg.sender))
-            revert NotVerified();
-        if (loans[msg.sender].isActive)
-            revert LoanAlreadyExists();
-
-        require(msg.value > 0, "Collateral required");
-        require(borrowAmount > 0, "Borrow amount zero");
+    function borrow(uint256 borrowAmount) external payable nonReentrant {
+        if (!identityRegistry.isVerified(msg.sender)) revert NotVerified();
+        if (loans[msg.sender].isActive) revert LoanAlreadyExists();
+        if (msg.value == 0 || borrowAmount == 0) revert ZeroAmount();
 
         uint256 bnbPrice = getLatestBnbPrice();
-        uint256 collateralValue =
-            (msg.value * bnbPrice) / 1e18;
+        uint256 collateralValue = (msg.value * bnbPrice) / 1e18;
 
-        uint256 maxBorrow =
-            calculateMaxBorrow(msg.sender, collateralValue);
+        uint256 maxBorrow = calculateMaxBorrow(msg.sender, collateralValue);
+        if (borrowAmount > maxBorrow) revert ExceedsMaxBorrow();
 
-        require(borrowAmount <= maxBorrow,
-            "Exceeds max borrow limits");
-
-        (, , uint256 interestRateBps, ) =
-            getRiskParameters(msg.sender);
-
-        uint256 interest =
-            (borrowAmount * interestRateBps) / 10000;
-
-        uint256 debtAmount = borrowAmount + interest;
+        (, , uint256 interestRateBps, ) = getRiskParameters(msg.sender);
+        uint256 interest = (borrowAmount * interestRateBps) / 10000;
+        uint128 debtAmount = uint128(borrowAmount + interest);
 
         loans[msg.sender] = Loan({
-            collateralAmount: msg.value,
-            borrowedAmount: borrowAmount,
+            collateralAmount: uint128(msg.value),
             debtAmount: debtAmount,
-            timestamp: block.timestamp,
-            dueDate: block.timestamp + LOAN_DURATION,
+            timestamp: uint40(block.timestamp),
+            dueDate: uint40(block.timestamp + LOAN_DURATION),
             isActive: true
         });
+        
+        totalDebt += debtAmount;
 
         borrowToken.safeTransfer(msg.sender, borrowAmount);
-
         emit Borrowed(msg.sender, msg.value, borrowAmount);
     }
 
@@ -251,128 +260,104 @@ contract HybridLending is ReentrancyGuard, Ownable {
         userLoan.isActive = false;
         userLoan.collateralAmount = 0;
         userLoan.debtAmount = 0;
+        
+        totalDebt -= debt;
 
-        borrowToken.safeTransferFrom(
-            msg.sender,
-            address(this),
-            debt
-        );
+        borrowToken.safeTransferFrom(msg.sender, address(this), debt);
 
-        (bool success, ) =
-            msg.sender.call{value: collateral}("");
-
-        require(success, "Collateral return failed");
+        (bool success, ) = msg.sender.call{value: collateral}("");
+        if (!success) revert TransferFailed();
 
         emit Repaid(msg.sender, debt);
+    }
+    
+    function repayPartial(uint256 amount) external nonReentrant {
+        if(amount == 0) revert ZeroAmount();
+        Loan storage userLoan = loans[msg.sender];
+        require(userLoan.isActive, "No active loan");
+        
+        if (amount >= userLoan.debtAmount) {
+            // Full repayment alias
+            uint256 debt = userLoan.debtAmount;
+            uint256 collateral = userLoan.collateralAmount;
+
+            userLoan.isActive = false;
+            userLoan.collateralAmount = 0;
+            userLoan.debtAmount = 0;
+            totalDebt -= debt;
+
+            borrowToken.safeTransferFrom(msg.sender, address(this), debt);
+
+            (bool success, ) = msg.sender.call{value: collateral}("");
+            if (!success) revert TransferFailed();
+
+            emit Repaid(msg.sender, debt);
+        } else {
+            userLoan.debtAmount -= uint128(amount);
+            totalDebt -= amount;
+            
+            borrowToken.safeTransferFrom(msg.sender, address(this), amount);
+            emit PartialRepaid(msg.sender, amount, userLoan.debtAmount);
+        }
     }
 
     // -----------------------------
     // LIQUIDATION
     // -----------------------------
 
-    function checkLiquidation(address user)
-        public
-        view
-        returns (bool)
-    {
+    function checkLiquidation(address user) public view returns (bool) {
         Loan memory userLoan = loans[user];
         if (!userLoan.isActive) return false;
-
-        if (block.timestamp > userLoan.dueDate)
-            return true;
+        if (block.timestamp > userLoan.dueDate) return true;
 
         uint256 bnbPrice = getLatestBnbPrice();
-        uint256 collateralValue =
-            (userLoan.collateralAmount * bnbPrice) / 1e18;
+        uint256 collateralValue = (userLoan.collateralAmount * bnbPrice) / 1e18;
 
-        (, uint256 liquidationThresholdBps, , ) =
-            getRiskParameters(user);
-
-        uint256 requiredCollateral =
-            (userLoan.debtAmount * liquidationThresholdBps) / 10000;
+        (, uint256 liquidationThresholdBps, , ) = getRiskParameters(user);
+        uint256 requiredCollateral = (userLoan.debtAmount * liquidationThresholdBps) / 10000;
 
         return collateralValue < requiredCollateral;
     }
 
-    function liquidate(address user)
-        external
-        nonReentrant
-    {
-        if (!checkLiquidation(user))
-            revert NotLiquidatable();
+    function liquidate(address user) external nonReentrant {
+        if (!checkLiquidation(user)) revert NotLiquidatable();
 
         Loan storage userLoan = loans[user];
         uint256 debtToRepay = userLoan.debtAmount;
 
         uint256 bnbPrice = getLatestBnbPrice();
-        uint256 debtInBnb =
-            (debtToRepay * 1e18) / bnbPrice;
+        uint256 debtInBnb = (debtToRepay * 1e18) / bnbPrice;
 
-        uint256 collateralToLiquidator =
-            debtInBnb +
-            ((debtInBnb * LIQUIDATION_BONUS_BPS) / 10000);
+        uint256 collateralToLiquidator = debtInBnb + ((debtInBnb * LIQUIDATION_BONUS_BPS) / 10000);
 
-        if (collateralToLiquidator >
-            userLoan.collateralAmount)
-        {
-            collateralToLiquidator =
-                userLoan.collateralAmount;
+        if (collateralToLiquidator > userLoan.collateralAmount) {
+            collateralToLiquidator = userLoan.collateralAmount;
         }
 
-        uint256 remainingCollateral =
-            userLoan.collateralAmount -
-            collateralToLiquidator;
+        uint256 remainingCollateral = userLoan.collateralAmount - collateralToLiquidator;
 
         userLoan.isActive = false;
         userLoan.collateralAmount = 0;
         userLoan.debtAmount = 0;
+        
+        totalDebt -= debtToRepay;
 
-        borrowToken.safeTransferFrom(
-            msg.sender,
-            address(this),
-            debtToRepay
-        );
+        borrowToken.safeTransferFrom(msg.sender, address(this), debtToRepay);
 
-        (bool success1, ) =
-            msg.sender.call{
-                value: collateralToLiquidator
-            }("");
-        require(success1,
-            "BNB transfer to liquidator failed");
+        (bool success1, ) = msg.sender.call{value: collateralToLiquidator}("");
+        if (!success1) revert TransferFailed();
 
         if (remainingCollateral > 0) {
             (bool success2, ) = user.call{value: remainingCollateral}("");
-            require(success2, "BNB transfer to user failed");
+            if (!success2) revert TransferFailed();
         }
 
-        uint256 currentScore =
-            creditScore.getScore(user);
-        uint256 minScore =
-            creditScore.MIN_SCORE();
-
-        uint256 newScore =
-            currentScore > (minScore + SCORE_PENALTY)
-                ? currentScore - SCORE_PENALTY
-                : minScore;
+        uint256 currentScore = creditScore.getScore(user);
+        uint256 minScore = creditScore.MIN_SCORE();
+        uint256 newScore = currentScore > (minScore + SCORE_PENALTY) ? currentScore - SCORE_PENALTY : minScore;
 
         creditScore.updateScore(user, newScore);
 
-        emit LoanLiquidated(
-            user,
-            msg.sender,
-            debtToRepay,
-            collateralToLiquidator
-        );
-    }
-
-    function depositLiquidity(uint256 amount)
-        external
-        onlyOwner
-    {
-        borrowToken.safeTransferFrom(
-            msg.sender,
-            address(this),
-            amount
-        );
+        emit LoanLiquidated(user, msg.sender, debtToRepay, collateralToLiquidator);
     }
 }
