@@ -194,21 +194,37 @@ const Dashboard = () => {
 
   const handleKycSubmit = async (e) => {
     e.preventDefault();
+    if (!address) return notify("Please connect MetaMask first", "error");
+    
     setKycLoading(true);
     try {
-      const response = await fetch(import.meta.env.VITE_KYC_API_URL || "http://localhost:3001/api/kyc/verify", {
+      // ✅ Use production Render URL or fallback to new port 10000
+      const apiUrl = import.meta.env.VITE_KYC_API_URL || "http://localhost:10000/api/kyc/verify";
+      
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ aadhaarNumber: aadhaar, walletAddress: address }),
       });
+
+      const data = await response.json();
+
       if (response.ok) {
-        notify("KYC Successfully Authenticated");
+        notify(`KYC Authenticated: ${data.message}`);
         setIsVerified(true);
+        // Refresh local data
+        const activeSigner = await provider.getSigner();
+        fetchUserData(activeSigner, address, true);
       } else {
-        notify("KYC Verification Failed", "error");
+        notify(data.error || "KYC Verification Failed", "error");
       }
     } catch (error) {
-      notify("Identity Server Offline", "error");
+      console.error("KYC Fetch Error:", error);
+      if (error instanceof TypeError && error.message === "Failed to fetch") {
+        notify("Connection Blocked: Check CSP or API status", "error");
+      } else {
+        notify("Identity Server Offline", "error");
+      }
     }
     setKycLoading(false);
   };
